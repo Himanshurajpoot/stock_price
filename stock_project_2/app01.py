@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from pathlib import Path
 
-from model import run_hybrid_model
+from model import StockDataError, run_hybrid_model
 
 # --------------------------------
 # PAGE CONFIG
@@ -32,30 +33,16 @@ st.write(
 # SIDEBAR
 # --------------------------------
 
+available_stocks = sorted(
+    path.stem
+    for path in Path(__file__).resolve().parent.glob("*.csv")
+)
+
 st.sidebar.header("Controls")
 
 stock = st.sidebar.selectbox(
-
     "Choose Stock",
-
-    [
-
-        "RELIANCE",
-
-        "ADANIPORTS",
-
-        "TCS",
-
-        "INFY",
-
-        "SBIN",
-
-        "HDFCBANK",
-
-        "ITC"
-
-    ]
-
+    available_stocks
 )
 
 forecast_days = st.sidebar.slider(
@@ -300,10 +287,12 @@ if run_button:
 
         )
 
+    except StockDataError as e:
+        st.error(str(e))
+
     except Exception as e:
 
         st.error(
-
             f"Error: {str(e)}"
 
         )
