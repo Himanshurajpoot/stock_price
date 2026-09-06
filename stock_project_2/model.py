@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from pathlib import Path
 
 from datetime import timedelta
 
@@ -16,7 +17,17 @@ from sklearn.metrics import (
 # LOAD DATA
 # ===================================
 
+class StockDataError(ValueError):
+    """Raised when a symbol cannot be loaded from a supported data source."""
+
+
 def load_stock(symbol):
+    symbol = str(symbol).strip().upper()
+    if not symbol:
+        raise StockDataError(
+            "Input Error: No data found for symbol. "
+            "Try a valid ticker or add a matching CSV file."
+        )
 
     ticker = symbol + ".NS"
 
@@ -27,10 +38,34 @@ def load_stock(symbol):
         period="5y",
 
         interval="1d",
-
         auto_adjust=False
-
     )
+
+    if df.empty:
+        csv_path = Path(__file__).resolve().parent / f"{symbol}.csv"
+        if csv_path.exists():
+            df = pd.read_csv(csv_path)
+            if "Close" not in df.columns and "Last" in df.columns:
+                df.rename(columns={"Last": "Close"}, inplace=True)
+            required_csv_cols = ["Date", "Close"]
+            missing_cols = [
+                column for column in required_csv_cols if column not in df.columns
+            ]
+            if missing_cols:
+                raise StockDataError(
+                    f"Input Error: CSV file for symbol {symbol} is missing "
+                    f"required columns: {', '.join(missing_cols)}."
+                )
+            for column in ["Open", "High", "Low"]:
+                if column not in df.columns:
+                    df[column] = df["Close"]
+            if "Volume" not in df.columns:
+                df["Volume"] = 0
+        else:
+            raise StockDataError(
+                f"Input Error: No data found for symbol {symbol}. "
+                "Try a valid ticker or add a matching CSV file."
+            )
 
     df.reset_index(inplace=True)
 
@@ -59,12 +94,10 @@ def load_stock(symbol):
     df = df[keep_cols].copy()
 
     df["Close"] = pd.to_numeric(
-
         df["Close"],
-
         errors="coerce"
-
     )
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
     df.dropna(inplace=True)
 
