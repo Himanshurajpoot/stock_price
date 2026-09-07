@@ -5,11 +5,9 @@ import logging
 from model import run_hybrid_model
 import config
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Constants - Import from config
 STOCKS = config.SUPPORTED_STOCKS
 MIN_FORECAST_DAYS = config.MIN_FORECAST_DAYS
 MAX_FORECAST_DAYS = config.MAX_FORECAST_DAYS
@@ -19,7 +17,6 @@ MAX_VALIDATION_DAYS = config.MAX_VALIDATION_DAYS
 DEFAULT_VALIDATION_DAYS = config.DEFAULT_VALIDATION_DAYS
 
 
-# ============ PAGE CONFIG ============
 st.set_page_config(
     page_title="Hybrid Stock Predictor",
     page_icon="📈",
@@ -28,7 +25,6 @@ st.set_page_config(
 )
 
 
-# ============ SIDEBAR CONTROLS ============
 st.sidebar.header("⚙️ Controls")
 
 stock = st.sidebar.selectbox(
@@ -53,7 +49,6 @@ validation_days = st.sidebar.slider(
     help="Historical days used for model validation"
 )
 
-# Advanced options
 with st.sidebar.expander("⚙️ Advanced Options"):
     use_cache = st.checkbox(
         "Use Caching",
@@ -74,20 +69,17 @@ run_button = st.sidebar.button(
 )
 
 
-# ============ HEADER ============
 st.title("📈 Hybrid NSE Stock Predictor")
 st.write(
     "**Live NSE Data** + **XGBoost** + **Prophet** Hybrid Forecast"
 )
 
-# Add info box
 st.info(
     "Select stock settings from sidebar and press **Run Forecast** to start.",
     icon="ℹ️"
 )
 
 
-# ============ RUN MODEL ============
 if run_button:
     try:
         with st.spinner("🔄 Running Hybrid Model..."):
@@ -98,7 +90,6 @@ if run_button:
                 use_cache=use_cache
             )
 
-        # -------- METRICS --------
         st.subheader("📊 Model Performance Metrics")
 
         col1, col2, col3, col4 = st.columns(4)
@@ -131,7 +122,6 @@ if run_button:
                 help="% of correct price direction predictions"
             )
 
-        # -------- MODEL WEIGHTS --------
         st.subheader("⚖️ Hybrid Model Weights")
 
         col1, col2 = st.columns(2)
@@ -150,12 +140,10 @@ if run_button:
                 delta=f"RMSE: {results['prophet_rmse']}"
             )
 
-        # -------- INTERACTIVE CHART --------
         st.subheader("📉 Historical + Forecast Chart")
 
         fig = go.Figure()
 
-        # Historical data
         fig.add_trace(
             go.Scatter(
                 x=results["historical_dates"],
@@ -167,7 +155,6 @@ if run_button:
             )
         )
 
-        # Hybrid forecast
         fig.add_trace(
             go.Scatter(
                 x=results["future_dates"],
@@ -179,7 +166,6 @@ if run_button:
             )
         )
 
-        # Confidence interval for future (shaded area)
         fig.add_trace(
             go.Scatter(
                 x=results["future_dates"],
@@ -205,7 +191,6 @@ if run_button:
             )
         )
 
-        # XGBoost forecast
         fig.add_trace(
             go.Scatter(
                 x=results["future_dates"],
@@ -217,7 +202,6 @@ if run_button:
             )
         )
 
-        # Prophet forecast
         fig.add_trace(
             go.Scatter(
                 x=results["future_dates"],
@@ -240,13 +224,11 @@ if run_button:
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # -------- TABS FOR DIFFERENT VIEWS --------
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
             ["🔮 Predictions", "📊 Technical Indicators", "💹 Backtest Results", 
              "📈 Advanced Metrics", "🔍 Feature Analysis", "⚠️ Anomalies & Correlations"]
         )
 
-        # TAB 1: Future Predictions
         with tab1:
             st.subheader("Future Predictions Table")
             pred_df = pd.DataFrame({
@@ -273,11 +255,9 @@ if run_button:
                 mime="text/csv"
             )
 
-        # TAB 2: Technical Indicators
         with tab2:
             col1, col2 = st.columns(2)
 
-            # RSI Chart
             with col1:
                 st.write("**Relative Strength Index (RSI)**")
                 rsi_dates = results["historical_dates"].tail(len(results["rsi"]))
@@ -296,7 +276,6 @@ if run_button:
                 fig_rsi.update_layout(height=300, hovermode="x unified", template="plotly_white")
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
-            # MACD Chart
             with col2:
                 st.write("**MACD (Moving Average Convergence Divergence)**")
                 macd_dates = results["historical_dates"].tail(len(results["macd"]))
@@ -331,7 +310,6 @@ if run_button:
                 fig_macd.update_layout(height=300, hovermode="x unified", template="plotly_white")
                 st.plotly_chart(fig_macd, use_container_width=True)
 
-            # Bollinger Bands Chart
             st.write("**Bollinger Bands**")
             bb_dates = results["historical_dates"].tail(len(results["bb_middle"]))
             fig_bb = go.Figure()
@@ -375,7 +353,6 @@ if run_button:
             fig_bb.update_layout(height=400, hovermode="x unified", template="plotly_white")
             st.plotly_chart(fig_bb, use_container_width=True)
 
-        # TAB 3: Backtest Results
         with tab3:
             if results["backtest"]:
                 st.write("**Strategy Performance (Based on Hybrid Predictions)**")
@@ -426,7 +403,6 @@ if run_button:
                         help="Final account value"
                     )
 
-                # Portfolio value chart
                 st.write("**Portfolio Value Over Time**")
                 backtest_dates = results["historical_dates"].tail(len(results["backtest"]["portfolio_values"]))
                 fig_backtest = go.Figure()
@@ -457,7 +433,6 @@ if run_button:
             else:
                 st.warning("Backtest data not available", icon="⚠️")
 
-        # TAB 4: Advanced Metrics
         with tab4:
             st.write("**Model Validation Confidence Intervals**")
             
@@ -487,7 +462,6 @@ if run_button:
                 hide_index=True
             )
 
-            # RSI Interpretation
             st.write("**Technical Analysis Insights**")
             
             latest_rsi = results["rsi"].iloc[-1]
@@ -498,7 +472,6 @@ if run_button:
             else:
                 st.info(f"🟡 RSI is {latest_rsi:.2f} - Stock is in **neutral** territory")
 
-            # MACD Interpretation
             latest_macd = results["macd"].iloc[-1]
             latest_signal = results["macd_signal"].iloc[-1]
             if latest_macd > latest_signal:
@@ -506,12 +479,10 @@ if run_button:
             else:
                 st.error("🔴 MACD is below signal line - **Bearish** signal")
 
-        # TAB 5: Feature Importance and Analysis
         with tab5:
             st.write("**Feature Importance**")
 
             if results.get("feature_importance"):
-                # Display feature importance as bar chart
                 importance_dict = results["feature_importance"]
                 importance_df = pd.DataFrame(
                     list(importance_dict.items()),
@@ -541,7 +512,6 @@ if run_button:
                 top_5 = importance_df.head(5)
                 st.dataframe(top_5, use_container_width=True, hide_index=True)
 
-            # Rolling Performance
             if results.get("rolling_performance"):
                 st.write("**Rolling Performance Metrics**")
                 rolling_df = pd.DataFrame({
@@ -569,11 +539,9 @@ if run_button:
                 )
                 st.plotly_chart(fig_rolling, use_container_width=True)
 
-        # TAB 6: Anomalies and Correlations
         with tab6:
             col1, col2 = st.columns(2)
 
-            # Anomalies section
             with col1:
                 st.write("**Anomaly Detection**")
                 st.metric(
@@ -589,7 +557,6 @@ if run_button:
                         icon="⚠️"
                     )
 
-            # Correlations section
             with col2:
                 st.write("**High Correlations**")
                 if results.get("correlations", {}).get("high_correlations"):
@@ -604,7 +571,6 @@ if run_button:
                 else:
                     st.success("No high correlations found (all < 0.8)", icon="✅")
 
-            # Correlation Heatmap
             st.write("**Correlation Matrix Heatmap**")
             if results.get("correlations", {}).get("matrix"):
                 corr_matrix = pd.DataFrame(results["correlations"]["matrix"])
@@ -627,7 +593,6 @@ if run_button:
                 )
                 st.plotly_chart(fig_corr, use_container_width=True)
 
-            # Export report
             if enable_reports:
                 st.write("**Export Results**")
                 col1, col2 = st.columns(2)
@@ -650,7 +615,6 @@ if run_button:
                         except Exception as e:
                             st.error(f"Error generating summary: {e}", icon="❌")
 
-        # Success message
         st.success(
             f"✅ Forecast completed successfully for {stock}!",
             icon="✅"
@@ -670,6 +634,5 @@ if run_button:
         )
         logger.error(f"Model execution error: {e}")
 
-        # Show debugging info in expander
         with st.expander("📋 Error Details"):
             st.code(str(e), language="text")

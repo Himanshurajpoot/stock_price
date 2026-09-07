@@ -18,7 +18,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 import os
 from pathlib import Path
 
-# Import config and utilities
 import config
 from utils import (
     save_model, load_model, load_cached_data, save_data_cache,
@@ -28,7 +27,6 @@ from utils import (
     ensure_directory
 )
 
-# Configure logging with rotation
 def setup_logging():
     """Setup logging with file rotation."""
     ensure_directory("logs")
@@ -36,10 +34,8 @@ def setup_logging():
     logger = logging.getLogger(__name__)
     logger.setLevel(config.LOG_LEVEL)
     
-    # Remove existing handlers
     logger.handlers.clear()
     
-    # File handler with rotation
     handler = logging.handlers.RotatingFileHandler(
         config.LOG_FILE,
         maxBytes=config.LOG_MAX_BYTES,
@@ -52,7 +48,6 @@ def setup_logging():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     
-    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
@@ -62,7 +57,6 @@ def setup_logging():
 
 logger = setup_logging()
 
-# Import constants from config
 DEFAULT_PERIOD = config.DEFAULT_PERIOD
 DEFAULT_INTERVAL = config.DEFAULT_INTERVAL
 LAG_FEATURES = config.LAG_FEATURES
@@ -80,10 +74,6 @@ ANOMALY_THRESHOLD = config.ANOMALY_THRESHOLD
 ENABLE_ANOMALY_DETECTION = config.ENABLE_ANOMALY_DETECTION
 ROLLING_WINDOW_DAYS = config.ROLLING_WINDOW_DAYS
 
-
-# ===================================
-# LOAD DATA WITH CACHING
-# ===================================
 
 def load_local_stock_csv(symbol: str) -> pd.DataFrame:
     """Load stock data from a bundled CSV file as a fallback when Yahoo Finance fails."""
@@ -131,7 +121,6 @@ def load_stock(symbol: str, use_cache: bool = True) -> pd.DataFrame:
     try:
         symbol = symbol.upper().strip().removesuffix(".NS")
 
-        # Try to load from cache first
         if use_cache:
             cached_data, is_valid = load_cached_data(
                 symbol,
@@ -183,7 +172,6 @@ def load_stock(symbol: str, use_cache: bool = True) -> pd.DataFrame:
 
         logger.info(f"Loaded {len(df)} records for {symbol}")
 
-        # Save to cache
         try:
             save_data_cache(df, symbol)
         except Exception as e:
@@ -195,10 +183,6 @@ def load_stock(symbol: str, use_cache: bool = True) -> pd.DataFrame:
         logger.error(f"Error loading stock data: {e}")
         raise
 
-
-# ===================================
-# FEATURE ENGINEERING
-# ===================================
 
 def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """Engineer features for machine learning model."""
@@ -226,10 +210,6 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
         logger.error(f"Error in feature engineering: {e}")
         raise
 
-
-# ===================================
-# TECHNICAL INDICATORS
-# ===================================
 
 def calculate_rsi(data: pd.Series, period: int = 14) -> pd.Series:
     """Calculate Relative Strength Index (RSI)."""
@@ -275,10 +255,6 @@ def calculate_confidence_intervals(
     return lower, upper
 
 
-# ===================================
-# FUTURE XGB FORECAST
-# ===================================
-
 def future_xgb_forecast(
     model: XGBRegressor,
     df: pd.DataFrame,
@@ -318,10 +294,6 @@ def future_xgb_forecast(
         logger.error(f"Error in XGBoost forecasting: {e}")
         raise
 
-
-# ===================================
-# BACKTESTING
-# ===================================
 
 def run_backtest(
     df: pd.DataFrame,
@@ -399,10 +371,6 @@ def run_backtest(
         return {}
 
 
-# ===================================
-# MAIN MODEL PIPELINE
-# ===================================
-
 def run_hybrid_model(
     symbol: str,
     forecast_days: int,
@@ -413,11 +381,9 @@ def run_hybrid_model(
     try:
         logger.info(f"Starting hybrid model for {symbol}")
         
-        # Load and prepare data with caching
         df = load_stock(symbol, use_cache=use_cache)
         df = create_features(df)
         
-        # Calculate technical indicators
         logger.info("Calculating technical indicators...")
         df["rsi"] = calculate_rsi(df["Close"])
         macd, signal, histogram = calculate_macd(df["Close"])
@@ -430,20 +396,17 @@ def run_hybrid_model(
         df["bb_upper"] = upper
         df["bb_lower"] = lower
         
-        # Detect anomalies
         logger.info("Detecting anomalies...")
         anomaly_df = detect_price_anomalies(df, threshold=ANOMALY_THRESHOLD)
         anomalies = anomaly_df[anomaly_df["is_return_anomaly"]].index.tolist()
         logger.info(f"Found {len(anomalies)} anomalies in price data")
         
-        # Train-test split
         train = df.iloc[:-validation_days]
         test = df.iloc[-validation_days:]
         test_indices = range(len(df) - validation_days, len(df))
         
         logger.info(f"Train set: {len(train)}, Test set: {len(test)}")
         
-        # ============ XGBOOST ============
         logger.info("Training XGBoost model...")
         
         xgb_model_path = f"models/{symbol}_xgb.pkl"
@@ -459,11 +422,9 @@ def run_hybrid_model(
         
         xgb_pred = xgb.predict(test[FEATURE_NAMES])
         
-        # Calculate feature importance
         feature_importance = calculate_feature_importance(xgb, FEATURE_NAMES)
         logger.info(f"Top 3 features: {list(feature_importance.items())[:3]}")
         
-        # ============ PROPHET ============
         logger.info("Training Prophet model...")
 
         validation_prophet = Prophet(**config.PROPHET_PARAMS)
@@ -496,7 +457,6 @@ def run_hybrid_model(
         future = prophet.make_future_dataframe(periods=forecast_days, freq="B")
         forecast = prophet.predict(future)
         
-        # ============ METRICS + WEIGHTS ============
         actual = np.array(test["Close"])
         
         xgb_rmse = np.sqrt(mean_squared_error(actual, xgb_pred))
@@ -514,16 +474,13 @@ def run_hybrid_model(
             prophet_weight * prophet_validation
         )
         
-        # Calculate confidence intervals
         logger.info("Calculating confidence intervals...")
         residuals = actual - hybrid_validation
         lower_ci, upper_ci = calculate_confidence_intervals(hybrid_validation, residuals)
         
-        # Calculate rolling performance
         logger.info("Calculating rolling performance metrics...")
         rolling_perf = calculate_rolling_performance(actual, hybrid_validation, ROLLING_WINDOW_DAYS)
         
-        # ============ FUTURE FORECASTS ============
         future_xgb = future_xgb_forecast(xgb, df, forecast_days, FEATURE_NAMES)
         future_prophet = np.array(forecast["yhat"].tail(forecast_days))
         
@@ -532,7 +489,6 @@ def run_hybrid_model(
             prophet_weight * future_prophet
         )
         
-        # Confidence intervals for future
         future_residuals = np.std(residuals)
         df_val = len(residuals) - 1
         cv = stats.t.ppf(0.975, df_val)
@@ -548,7 +504,6 @@ def run_hybrid_model(
         
         latest_price = float(df["Close"].values[-1])
         
-        # ============ FINAL METRICS ============
         hybrid_rmse = np.sqrt(mean_squared_error(actual, hybrid_validation))
         hybrid_mape = mean_absolute_percentage_error(actual, hybrid_validation) * 100
         
@@ -556,11 +511,9 @@ def run_hybrid_model(
         pred_direction = np.sign(np.diff(hybrid_validation))
         direction_acc = np.mean(actual_direction == pred_direction) * 100
         
-        # ============ BACKTESTING ============
         logger.info("Running backtest...")
         backtest_results = run_backtest(df, hybrid_validation, test_indices)
         
-        # ============ CORRELATION ANALYSIS ============
         logger.info("Analyzing correlations...")
         corr_matrix = calculate_correlation_matrix(train[FEATURE_NAMES])
         high_corr = find_high_correlations(corr_matrix, threshold=0.8)
@@ -572,7 +525,6 @@ def run_hybrid_model(
         )
         
         return {
-            # Basic metrics
             "latest_price": latest_price,
             "rmse": round(hybrid_rmse, 2),
             "mape": round(hybrid_mape, 2),
@@ -580,7 +532,6 @@ def run_hybrid_model(
             "xgb_weight": float(xgb_weight),
             "prophet_weight": float(prophet_weight),
             
-            # Historical and forecast data
             "historical_dates": df["Date"],
             "historical_prices": df["Close"],
             "future_dates": future_dates,
@@ -590,13 +541,11 @@ def run_hybrid_model(
             "xgb_rmse": round(xgb_rmse, 2),
             "prophet_rmse": round(prophet_rmse, 2),
             
-            # Confidence intervals
             "validation_lower_ci": lower_ci,
             "validation_upper_ci": upper_ci,
             "future_lower_ci": future_lower,
             "future_upper_ci": future_upper,
             
-            # Technical indicators
             "rsi": df["rsi"].tail(30),
             "macd": df["macd"].tail(30),
             "macd_signal": df["macd_signal"].tail(30),
@@ -605,20 +554,15 @@ def run_hybrid_model(
             "bb_lower": df["bb_lower"].tail(30),
             "bb_middle": df["bb_middle"].tail(30),
             
-            # Backtest results
             "backtest": backtest_results,
             
-            # Anomaly detection
             "anomalies": anomalies,
             "anomaly_count": len(anomalies),
             
-            # Feature importance
             "feature_importance": feature_importance,
             
-            # Rolling performance
             "rolling_performance": rolling_perf,
             
-            # Correlation analysis
             "correlations": {
                 "matrix": corr_matrix.to_dict(),
                 "high_correlations": high_corr
